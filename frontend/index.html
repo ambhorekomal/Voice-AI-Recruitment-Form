@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Voice Recruitment Assistant</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="app-container">
+      <main class="card">
+        <header class="card-header">
+          <h1>Voice Recruitment Form</h1>
+          <p>
+            Speak with the assistant to fill your application. You can also type
+            if you prefer.
+          </p>
+        </header>
+
+        <section class="content">
+          <section class="form-section">
+            <form id="applicationForm">
+              <div class="form-grid">
+                <label class="field">
+                  <span>Full Name</span>
+                  <input id="fullName" name="fullName" type="text" />
+                </label>
+
+                <label class="field">
+                  <span>Email</span>
+                  <input id="email" name="email" type="email" />
+                </label>
+
+                <label class="field">
+                  <span>Phone</span>
+                  <input id="phone" name="phone" type="tel" />
+                </label>
+
+                <label class="field">
+                  <span>Education</span>
+                  <input id="education" name="education" type="text" />
+                </label>
+
+                <label class="field">
+                  <span>Years of Experience</span>
+                  <input
+                    id="yearsExperience"
+                    name="yearsExperience"
+                    type="number"
+                    min="0"
+                  />
+                </label>
+
+                <label class="field">
+                  <span>Primary Skills</span>
+                  <input
+                    id="primarySkills"
+                    name="primarySkills"
+                    type="text"
+                    placeholder="e.g. React, Node.js, APIs"
+                  />
+                </label>
+
+                <label class="field">
+                  <span>Current Company</span>
+                  <input id="currentCompany" name="currentCompany" type="text" />
+                </label>
+
+                <label class="field">
+                  <span>Expected Salary</span>
+                  <input
+                    id="expectedSalary"
+                    name="expectedSalary"
+                    type="text"
+                  />
+                </label>
+
+                <label class="field">
+                  <span>Location</span>
+                  <input id="location" name="location" type="text" />
+                </label>
+
+                <label class="field field-textarea full-width">
+                  <span>Why do you want this job?</span>
+                  <textarea
+                    id="motivation"
+                    name="motivation"
+                    rows="3"
+                  ></textarea>
+                </label>
+
+                <label class="field">
+                  <span>GitHub</span>
+                  <input id="github" name="github" type="url" />
+                </label>
+
+                <label class="field">
+                  <span>LinkedIn</span>
+                  <input id="linkedin" name="linkedin" type="url" />
+                </label>
+
+                <label class="field">
+                  <span>Portfolio</span>
+                  <input id="portfolio" name="portfolio" type="url" />
+                </label>
+              </div>
+
+              <div class="form-actions">
+                <button type="submit" id="submitBtn">Submit Manually</button>
+                <button type="button" id="resetBtn" class="secondary">
+                  Reset
+                </button>
+              </div>
+            </form>
+
+            <section class="summary-section">
+              <h2>Candidate Summary</h2>
+              <p id="summaryPlaceholder">
+                After you submit via voice, a short recruiter-style evaluation
+                will appear here.
+              </p>
+              <div id="summaryText" class="summary-text"></div>
+            </section>
+
+            <section class="resume-section">
+              <h2>Optional Voice Resume</h2>
+              <p class="resume-help">
+                If you say something like
+                <strong>"I want to create a resume"</strong>, the assistant will
+                switch to resume mode and fill this simple resume template using
+                your voice.
+              </p>
+
+              <div class="resume-card">
+                <div class="resume-field">
+                  <span class="resume-label">Name</span>
+                  <div id="resumeName" class="resume-value"></div>
+                </div>
+                <div class="resume-field">
+                  <span class="resume-label">Education</span>
+                  <div id="resumeEducation" class="resume-value"></div>
+                </div>
+                <div class="resume-field">
+                  <span class="resume-label">Experience</span>
+                  <div id="resumeExperience" class="resume-value"></div>
+                </div>
+                <div class="resume-field">
+                  <span class="resume-label">Skills</span>
+                  <div id="resumeSkills" class="resume-value"></div>
+                </div>
+                <div class="resume-field">
+                  <span class="resume-label">Projects</span>
+                  <div id="resumeProjects" class="resume-value"></div>
+                </div>
+              </div>
+            </section>
+          </section>
+
+          <aside class="chat-section">
+            <h2>Conversation</h2>
+            <div id="chat" class="chat-window"></div>
+          </aside>
+        </section>
+      </main>
+    </div>
+
+    <button id="voiceBtn" class="voice-button" aria-label="Start voice assistant">
+      <span class="mic-icon">🎤</span>
+      <span class="pulse"></span>
+    </button>
+
+    <script src="script.js"></script>
+  </body>
+  </html>
+
