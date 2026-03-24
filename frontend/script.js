@@ -1,11 +1,11 @@
 // script.js
-// Frontend logic for the voice recruitment assistant
+// Frontend: always-on speech recognition + Cartesia TTS from server (optional)
 
 (() => {
   const chatEl = document.getElementById("chat");
-  const voiceBtn = document.getElementById("voiceBtn");
+  const voiceStatus = document.getElementById("voiceStatus");
+  const voiceStatusText = voiceStatus?.querySelector(".voice-status-text");
   const applicationForm = document.getElementById("applicationForm");
-  const submitBtn = document.getElementById("submitBtn");
   const resetBtn = document.getElementById("resetBtn");
   const summaryPlaceholder = document.getElementById("summaryPlaceholder");
   const summaryText = document.getElementById("summaryText");
@@ -18,7 +18,16 @@
   let ws;
   let recognition;
   let isListening = false;
-  let lastUserTranscript = "";
+  let keepListening = true;
+  const cartesiaQueue = [];
+  let cartesiaPlaying = false;
+
+  function setVoiceStatus(text, listening) {
+    if (voiceStatusText) voiceStatusText.textContent = text;
+    if (voiceStatus) {
+      voiceStatus.classList.toggle("listening", Boolean(listening));
+    }
+  }
 
   function createBanner(message, type = "info") {
     const existing = document.querySelector(".banner");
@@ -51,12 +60,49 @@
     chatEl.scrollTop = chatEl.scrollHeight;
   }
 
-  function speak(text) {
+  function speakBrowser(text) {
     if (!("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = "en-US";
     window.speechSynthesis.speak(utterance);
+  }
+
+  function pumpCartesiaQueue() {
+    if (cartesiaPlaying || cartesiaQueue.length === 0) return;
+    cartesiaPlaying = true;
+    const item = cartesiaQueue.shift();
+    const mimeType = item.mimeType || "audio/wav";
+    const audio = new Audio(`data:${mimeType};base64,${item.base64}`);
+    audio.onended = () => {
+      cartesiaPlaying = false;
+      pumpCartesiaQueue();
+    };
+    audio.onerror = () => {
+      cartesiaPlaying = false;
+      pumpCartesiaQueue();
+    };
+    const playOnce = () => {
+      audio.play().catch(() => {
+        createBanner("Tap anywhere on the page to allow voice playback.", "info");
+        const unlock = () => {
+          audio.play().catch(() => {});
+          document.removeEventListener("click", unlock);
+          document.removeEventListener("keydown", unlock);
+        };
+        document.addEventListener("click", unlock, { once: true });
+        document.addEventListener("keydown", unlock, { once: true });
+        cartesiaPlaying = false;
+        pumpCartesiaQueue();
+      });
+    };
+    playOnce();
+  }
+
+  function enqueueCartesiaAudio(base64, mimeType) {
+    if (!base64) return;
+    cartesiaQueue.push({ base64, mimeType });
+    pumpCartesiaQueue();
   }
 
   function connectWebSocket() {
@@ -79,13 +125,17 @@
 
       if (data.type === "assistant_message") {
         addChatMessage(data.text, "assistant");
-        speak(data.text);
+        if (!data.cartesia) {
+          speakBrowser(data.text);
+        }
+      } else if (data.type === "tts_audio") {
+        enqueueCartesiaAudio(data.base64, data.mimeType);
       } else if (data.type === "form_update") {
         handleFormUpdate(data.data);
       } else if (data.type === "resume_update") {
         handleResumeUpdate(data.data);
       } else if (data.type === "submit_request") {
-        // The AI will have also sent an assistant message prompting for submit
+        // Assistant already sent a spoken prompt
       } else if (data.type === "submit_form") {
         submit_form();
       } else if (data.type === "summary") {
@@ -98,6 +148,7 @@
 
     ws.addEventListener("close", () => {
       createBanner("Disconnected from assistant. Refresh to reconnect.", "error");
+      setVoiceStatus("Disconnected — refresh page", false);
     });
 
     ws.addEventListener("error", () => {
@@ -110,14 +161,14 @@
       createBanner("Connection is not ready yet.", "error");
       return;
     }
-    const payload = {
-      type: "user_input",
-      text,
-    };
-    ws.send(JSON.stringify(payload));
+    ws.send(
+      JSON.stringify({
+        type: "user_input",
+        text,
+      })
+    );
   }
 
-  // Tool-like functions to update DOM
   function fieldElement(id) {
     return document.getElementById(id);
   }
@@ -272,7 +323,6 @@
 
   function submit_form() {
     if (!applicationForm) return;
-    // Prevent actual navigation; we treat this as a virtual submit
     addChatMessage("Submitting your application...", "assistant");
     applicationForm.classList.add("submitted");
     createBanner("Application submitted (virtual).", "info");
@@ -293,7 +343,15 @@
     }
   }
 
-  // Speech recognition handling
+  function startRecognitionLoop() {
+    if (!recognition) return;
+    try {
+      recognition.start();
+    } catch {
+      // Already running — ignore
+    }
+  }
+
   function initSpeechRecognition() {
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -302,62 +360,90 @@
         "Your browser does not support speech recognition. Try Chrome desktop.",
         "error"
       );
-      voiceBtn.disabled = true;
+      setVoiceStatus("Speech recognition not supported", false);
       return;
     }
 
     recognition = new SpeechRecognition();
     recognition.lang = "en-US";
+    recognition.continuous = true;
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
 
     recognition.addEventListener("start", () => {
       isListening = true;
-      voiceBtn.classList.add("listening");
+      setVoiceStatus("Listening — speak anytime", true);
     });
 
     recognition.addEventListener("end", () => {
       isListening = false;
-      voiceBtn.classList.remove("listening");
-
-      if (!lastUserTranscript) {
-        addChatMessage("I didn't catch that. Could you please repeat?", "assistant");
-        speak("I didn't catch that. Could you please repeat?");
+      if (!keepListening) {
+        setVoiceStatus("Microphone off", false);
+        return;
       }
+      setVoiceStatus("Reconnecting microphone…", false);
+      setTimeout(() => {
+        try {
+          recognition.start();
+        } catch {
+          // ignore
+        }
+      }, 120);
     });
 
     recognition.addEventListener("result", (event) => {
       const transcript = Array.from(event.results)
         .map((result) => result[0].transcript)
         .join(" ");
-      lastUserTranscript = transcript.trim();
-      if (!lastUserTranscript) return;
-      addChatMessage(lastUserTranscript, "user");
-      sendUserInput(lastUserTranscript);
+      const trimmed = transcript.trim();
+      if (!trimmed) return;
+      addChatMessage(trimmed, "user");
+      sendUserInput(trimmed);
     });
 
-    recognition.addEventListener("error", () => {
+    recognition.addEventListener("error", (e) => {
+      const err = e.error || "";
+      if (err === "no-speech" || err === "aborted") {
+        if (keepListening) {
+          setTimeout(() => startRecognitionLoop(), 200);
+        }
+        return;
+      }
+      if (err === "not-allowed") {
+        setVoiceStatus("Microphone blocked — allow access in the browser", false);
+        createBanner(
+          "Microphone access denied. Allow the mic in your browser address bar, then refresh.",
+          "error"
+        );
+        keepListening = false;
+        return;
+      }
       createBanner("Speech recognition error. Please try again.", "error");
     });
-  }
 
-  function toggleListening() {
-    if (!recognition) return;
-    if (isListening) {
-      recognition.stop();
-      return;
-    }
-    lastUserTranscript = "";
-    recognition.start();
+    // Browsers often require a user gesture for the mic; try auto-start, then one-click fallback
+    const tryAutoStart = () => {
+      try {
+        recognition.start();
+      } catch {
+        setVoiceStatus("Click anywhere to enable the microphone", false);
+        const once = () => {
+          document.removeEventListener("click", once);
+          document.removeEventListener("keydown", once);
+          keepListening = true;
+          startRecognitionLoop();
+        };
+        document.addEventListener("click", once, { once: true });
+        document.addEventListener("keydown", once, { once: true });
+      }
+    };
+
+    setTimeout(tryAutoStart, 400);
   }
 
   function init() {
     connectWebSocket();
     initSpeechRecognition();
-
-    voiceBtn.addEventListener("click", () => {
-      toggleListening();
-    });
 
     applicationForm.addEventListener("submit", (e) => {
       e.preventDefault();
@@ -372,4 +458,3 @@
 
   window.addEventListener("DOMContentLoaded", init);
 })();
-

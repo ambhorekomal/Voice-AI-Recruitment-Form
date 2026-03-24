@@ -143,6 +143,7 @@ Current resume state:
 ${resumeJson}
 
 Conversation history:
+
 ${historyText}
 
 Latest user message:

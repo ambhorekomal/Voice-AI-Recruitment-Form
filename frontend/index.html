@@ -12,8 +12,8 @@
         <header class="card-header">
           <h1>Voice Recruitment Form</h1>
           <p>
-            Speak with the assistant to fill your application. You can also type
-            if you prefer.
+            Listening starts automatically—speak naturally to fill the form. The
+            assistant greets you when the page loads.
           </p>
         </header>
 
@@ -164,10 +164,15 @@
       </main>
     </div>
 
-    <button id="voiceBtn" class="voice-button" aria-label="Start voice assistant">
-      <span class="mic-icon">🎤</span>
-      <span class="pulse"></span>
-    </button>
+    <div
+      id="voiceStatus"
+      class="voice-status"
+      role="status"
+      aria-live="polite"
+    >
+      <span class="voice-status-mic" aria-hidden="true">🎤</span>
+      <span class="voice-status-text">Starting microphone…</span>
+    </div>
 
     <script src="script.js"></script>
   </body>

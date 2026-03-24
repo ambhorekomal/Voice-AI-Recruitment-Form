@@ -10,9 +10,38 @@ const cors = require("cors");
 const WebSocket = require("ws");
 
 const { createAgent } = require("./aiAgent");
+const { synthesizeCartesiaSpeech } = require("./cartesiaTts");
+
+const GREETING =
+  "Hello! Let's fill this application form together. Share your details when you're ready—you can ask me questions any time, and I'll respond. To begin, what is your full name?";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+async function sendAssistantMessage(ws, text) {
+  const hasCartesiaKey = Boolean(process.env.CARTESIA_API_KEY);
+  if (hasCartesiaKey) {
+    const b64 = await synthesizeCartesiaSpeech(text);
+    if (b64) {
+      ws.send(
+        JSON.stringify({
+          type: "assistant_message",
+          text,
+          cartesia: true,
+        })
+      );
+      ws.send(
+        JSON.stringify({
+          type: "tts_audio",
+          mimeType: "audio/wav",
+          base64: b64,
+        })
+      );
+      return;
+    }
+  }
+  ws.send(JSON.stringify({ type: "assistant_message", text }));
+}
 
 app.use(cors());
 
@@ -32,12 +61,9 @@ const wss = new WebSocket.Server({ server, path: "/ws" });
 wss.on("connection", (ws) => {
   const agent = createAgent();
 
-  ws.send(
-    JSON.stringify({
-      type: "assistant_message",
-      text: "Hello, I will help you fill the application form. What is your full name?",
-    })
-  );
+  (async () => {
+    await sendAssistantMessage(ws, GREETING);
+  })();
 
   ws.on("message", async (message) => {
     let parsed;
@@ -55,11 +81,9 @@ wss.on("connection", (ws) => {
 
     if (parsed.type === "control" && parsed.command === "reset") {
       agent.reset();
-      ws.send(
-        JSON.stringify({
-          type: "assistant_message",
-          text: "I have cleared the form. Let's start again. What is your full name?",
-        })
+      await sendAssistantMessage(
+        ws,
+        "I have cleared the form. Let's start again. What is your full name?"
       );
       return;
     }
@@ -89,19 +113,19 @@ wss.on("connection", (ws) => {
           return;
         }
 
-        // Send any messages the agent wants to push to the client
-        (result.messages || []).forEach((msg) => {
-          ws.send(JSON.stringify(msg));
-        });
+        for (const msg of result.messages || []) {
+          if (msg.type === "assistant_message" && typeof msg.text === "string") {
+            await sendAssistantMessage(ws, msg.text);
+          } else {
+            ws.send(JSON.stringify(msg));
+          }
+        }
 
         // If the agent determined that we should submit, instruct the frontend
         if (result.shouldSubmit) {
-          ws.send(
-            JSON.stringify({
-              type: "assistant_message",
-              text:
-                "Great, I will submit your application now. Thank you for your time.",
-            })
+          await sendAssistantMessage(
+            ws,
+            "Great, I will submit your application now. Thank you for your time."
           );
 
           // Signal the frontend to submit the form
